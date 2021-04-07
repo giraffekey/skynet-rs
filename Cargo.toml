@@ -1,0 +1,8 @@
+[package]
+name = "skynet"
+version = "0.1.0"
+authors = ["cerebralcourt <0hhvxhv9@anonaddy.me>"]
+edition = "2018"
+
+[dependencies]
+http = "0.2"
