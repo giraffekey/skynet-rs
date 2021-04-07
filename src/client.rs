@@ -1,4 +1,6 @@
-use crate::util::DEFAULT_PORTAL_URL;
+use crate::{upload, UploadOptions, SkynetResult, util::DEFAULT_PORTAL_URL};
+use std::{collections::HashMap, path::Path};
+use mime::Mime;
 
 #[derive(Debug)]
 pub struct SkynetClientOptions {
@@ -31,6 +33,30 @@ impl SkynetClient {
 
   pub fn get_portal_url(&self) -> &str {
     self.portal_url.as_str()
+  }
+
+  pub async fn upload_data(
+    &self,
+    data: HashMap<String, (Mime, Vec<u8>)>,
+    opt: UploadOptions,
+  ) -> SkynetResult<String> {
+    upload::upload_data(self, data, opt).await
+  }
+
+  pub async fn upload_file(
+    &self,
+    path: &Path,
+    opt: UploadOptions,
+  ) -> SkynetResult<String> {
+    upload::upload_file(self, path, opt).await
+  }
+
+  pub async fn upload_directory(
+    &self,
+    path: &Path,
+    opt: UploadOptions,
+  ) -> SkynetResult<String> {
+    upload::upload_directory(self, path, opt).await
   }
 }
 

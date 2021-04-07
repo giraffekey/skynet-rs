@@ -1,4 +1,4 @@
-use crate::{SkynetClient, util::build_request, URI_SKYNET_PREFIX};
+use crate::{SkynetClient, SkynetError::*, SkynetResult, util::build_request, URI_SKYNET_PREFIX};
 use std::{
   collections::HashMap,
   fs,
@@ -12,23 +12,6 @@ use mime::{Mime, MULTIPART_FORM_DATA};
 use serde::Deserialize;
 use textnonce::TextNonce;
 use walkdir::WalkDir;
-
-#[derive(Debug)]
-pub enum UploadError {
-  NoCustomDirname,
-  FailedTextNonce(String),
-  IoWrite(std::io::Error),
-  FromUtf8,
-  BodyParse,
-  HttpRequest(hyper::Error),
-  PortalResponse(String),
-  NotFile,
-  NotDirectory,
-}
-
-use UploadError::*;
-
-pub type SkynetResult<T> = Result<T, UploadError>;
 
 #[derive(Debug)]
 pub struct UploadOptions {
@@ -99,33 +82,36 @@ pub async fn upload_data(
   }
 
   let mut body = Vec::new();
-  let boundary = TextNonce::sized(68).map_err(|s| FailedTextNonce(s))?.into_string().into_bytes();
+  let boundary = TextNonce::sized(68).map_err(TextNonceError)?.into_string().into_bytes();
 
   for (filename, (mime, bytes)) in &data {
     let disposition = format!("form-data; name=\"{}\"; filename=\"{}\"", fieldname, filename);
     let headers = format!("Content-Disposition: {}\r\nContent-Type: {}\r\n", disposition, mime);
 
-    body.write_all(b"--").map_err(|e| IoWrite(e))?;
-    body.write_all(&boundary).map_err(|e| IoWrite(e))?;
-    body.write_all(b"\r\n").map_err(|e| IoWrite(e))?;
-    body.write_all(headers.as_bytes()).map_err(|e| IoWrite(e))?;
-    body.write_all(b"\r\n").map_err(|e| IoWrite(e))?;
-    body.write_all(bytes).map_err(|e| IoWrite(e))?;
-    body.write_all(b"\r\n").map_err(|e| IoWrite(e))?;
+    body.write_all(b"--").map_err(WriteError)?;
+    body.write_all(&boundary).map_err(WriteError)?;
+    body.write_all(b"\r\n").map_err(WriteError)?;
+    body.write_all(headers.as_bytes()).map_err(WriteError)?;
+    body.write_all(b"\r\n").map_err(WriteError)?;
+    body.write_all(bytes).map_err(WriteError)?;
+    body.write_all(b"\r\n").map_err(WriteError)?;
   }
 
-  body.write_all(b"--").map_err(|e| IoWrite(e))?;
-  body.write_all(&boundary).map_err(|e| IoWrite(e))?;
-  body.write_all(b"--\r\n").map_err(|e| IoWrite(e))?;
+  body.write_all(b"--").map_err(WriteError)?;
+  body.write_all(&boundary).map_err(WriteError)?;
+  body.write_all(b"--\r\n").map_err(WriteError)?;
 
-  let content_type = format!("{}; boundary=\"{}\"", MULTIPART_FORM_DATA, str::from_utf8(&boundary).map_err(|_| FromUtf8)?);
+  let content_type = format!(
+    "{}; boundary=\"{}\"",
+    MULTIPART_FORM_DATA,
+    str::from_utf8(&boundary).map_err(Utf8Error)?);
 
   let req = build_request(client, req, opt, None, Some(content_type), query);
 
-  let req = req.body(body.into()).map_err(|_| BodyParse)?;
-  let res = hyper.request(req).await.map_err(|e| HttpRequest(e))?;
-  let body = body::to_bytes(res.into_body()).await.map_err(|_| BodyParse)?;
-  let body_str = str::from_utf8(&body).map_err(|_| FromUtf8)?;
+  let req = req.body(body.into()).map_err(HttpError)?;
+  let res = hyper.request(req).await.map_err(HyperError)?;
+  let body = body::to_bytes(res.into_body()).await.map_err(HyperError)?;
+  let body_str = str::from_utf8(&body).map_err(Utf8Error)?;
   let res: UploadResponse = serde_json::from_str(body_str)
     .map_err(|_| PortalResponse(body_str.to_string()))?;
 
@@ -149,7 +135,7 @@ pub async fn upload_file(
   } else {
     mime::APPLICATION_OCTET_STREAM
   };
-  let bytes = fs::read(path).unwrap();
+  let bytes = fs::read(path).map_err(FileError)?;
 
   let mut data = HashMap::new();
   data.insert(filename, (mime, bytes));
@@ -179,7 +165,7 @@ pub async fn upload_directory(
       } else {
         mime::APPLICATION_OCTET_STREAM
       };
-      let bytes = fs::read(path).unwrap();
+      let bytes = fs::read(path).map_err(FileError)?;
 
       data.insert(filename, (mime, bytes));
     }
