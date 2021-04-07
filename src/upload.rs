@@ -1,15 +1,17 @@
 use crate::{SkynetClient, util::build_request, URI_SKYNET_PREFIX};
 use std::{
   collections::HashMap,
+  fs,
   io::Write,
   path::Path,
   str,
 };
 use hyper::{body, Client, Request};
 use hyper_tls::HttpsConnector;
-use mime::Mime;
+use mime::{Mime, MULTIPART_FORM_DATA};
 use serde::Deserialize;
 use textnonce::TextNonce;
+use walkdir::WalkDir;
 
 #[derive(Debug)]
 pub enum UploadError {
@@ -20,6 +22,8 @@ pub enum UploadError {
   BodyParse,
   HttpRequest(hyper::Error),
   PortalResponse(String),
+  NotFile,
+  NotDirectory,
 }
 
 use UploadError::*;
@@ -46,7 +50,7 @@ impl Default for UploadOptions {
       api_key: None,
       custom_user_agent: None,
       portal_file_fieldname: "file".to_string(),
-      portal_directory_file_fieldname: "file[]".to_string(),
+      portal_directory_file_fieldname: "files[]".to_string(),
       custom_filename: None,
       custom_dirname: None,
       skykey_name: None,
@@ -72,12 +76,8 @@ pub async fn upload_data(
   let mut query = HashMap::new();
 
   let (fieldname, filename) =
-    if data.len() == 1 {
-      if opt.custom_dirname.is_some() {
-        (opt.portal_directory_file_fieldname.clone(), "".to_string())
-      } else {
-        (opt.portal_file_fieldname.clone(), "".to_string())
-      }
+    if data.len() == 1 && opt.custom_dirname.is_none() {
+      (opt.portal_file_fieldname.clone(), "".to_string())
     } else {
       if let Some(ref custom_dirname) = opt.custom_dirname {
         (opt.portal_directory_file_fieldname.clone(), custom_dirname.clone())
@@ -118,7 +118,7 @@ pub async fn upload_data(
   body.write_all(&boundary).map_err(|e| IoWrite(e))?;
   body.write_all(b"--\r\n").map_err(|e| IoWrite(e))?;
 
-  let content_type = format!("multipart/form-data; boundary={}", str::from_utf8(&boundary).map_err(|_| FromUtf8)?);
+  let content_type = format!("{}; boundary=\"{}\"", MULTIPART_FORM_DATA, str::from_utf8(&boundary).map_err(|_| FromUtf8)?);
 
   let req = build_request(client, req, opt, None, Some(content_type), query);
 
@@ -139,7 +139,22 @@ pub async fn upload_file(
   path: &Path,
   opt: UploadOptions,
 ) -> SkynetResult<String> {
-  upload_data(client, HashMap::new(), opt).await
+  if !path.is_file() {
+    return Err(NotFile);
+  }
+
+  let filename = path.file_name().unwrap().to_str().unwrap().to_string();
+  let mime = if let Some(mime) = mime_guess::from_path(path).first() {
+    mime
+  } else {
+    mime::APPLICATION_OCTET_STREAM
+  };
+  let bytes = fs::read(path).unwrap();
+
+  let mut data = HashMap::new();
+  data.insert(filename, (mime, bytes));
+
+  upload_data(client, data, opt).await
 }
 
 pub async fn upload_directory(
@@ -147,7 +162,37 @@ pub async fn upload_directory(
   path: &Path,
   opt: UploadOptions,
 ) -> SkynetResult<String> {
-  upload_data(client, HashMap::new(), opt).await
+  if !path.is_dir() {
+    return Err(NotDirectory);
+  }
+
+  let mut data = HashMap::new();
+  let dirpath = path;
+
+  for entry in WalkDir::new(dirpath) {
+    let entry = entry.unwrap();
+    let path = entry.path();
+    if path.is_file() {
+      let filename = path.as_os_str().to_str().unwrap().to_string();
+      let mime = if let Some(mime) = mime_guess::from_path(path).first() {
+        mime
+      } else {
+        mime::APPLICATION_OCTET_STREAM
+      };
+      let bytes = fs::read(path).unwrap();
+
+      data.insert(filename, (mime, bytes));
+    }
+  }
+
+  let dirname = path.file_name().unwrap().to_str().unwrap().to_string();
+
+  let opt = UploadOptions {
+    custom_dirname: Some(dirname),
+    ..opt
+  };
+
+  upload_data(client, data, opt).await
 }
 
 #[cfg(test)]
@@ -160,6 +205,33 @@ mod tests {
     let mut data = HashMap::new();
     data.insert("hello.txt".into(), (mime::TEXT_PLAIN, "hello world".into()));
     let res = upload_data(&client, data, UploadOptions::default()).await;
+    println!("{:?}", res);
+    assert!(res.is_ok());
+    let skylink = res.unwrap();
+    assert!(skylink.starts_with(URI_SKYNET_PREFIX));
+  }
+
+  #[tokio::test]
+  async fn test_upload_file() {
+    let client = SkynetClient::default();
+    fs::write("tmp.txt", "hello world").unwrap();
+    let res = upload_file(&client, &Path::new("tmp.txt"), UploadOptions::default()).await;
+    fs::remove_file("tmp.txt").unwrap();
+    println!("{:?}", res);
+    assert!(res.is_ok());
+    let skylink = res.unwrap();
+    assert!(skylink.starts_with(URI_SKYNET_PREFIX));
+  }
+
+  #[tokio::test]
+  async fn test_upload_directory() {
+    let client = SkynetClient::default();
+    fs::create_dir("tmpdir").unwrap();
+    fs::write("tmpdir/1.txt", "hello 1").unwrap();
+    fs::write("tmpdir/2.txt", "hello 2").unwrap();
+    let res = upload_directory(&client, &Path::new("tmpdir"), UploadOptions::default()).await;
+    fs::remove_dir_all("tmpdir").unwrap();
+    println!("{:?}", res);
     assert!(res.is_ok());
     let skylink = res.unwrap();
     assert!(skylink.starts_with(URI_SKYNET_PREFIX));
