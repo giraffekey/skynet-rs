@@ -56,20 +56,20 @@ impl SkynetClient {
     upload::upload_data(self, data, opt).await
   }
 
-  pub async fn upload_file(
+  pub async fn upload_file<P: AsRef<Path>>(
     &self,
-    path: &Path,
+    path: P,
     opt: UploadOptions,
   ) -> SkynetResult<String> {
-    upload::upload_file(self, path, opt).await
+    upload::upload_file(self, path.as_ref(), opt).await
   }
 
-  pub async fn upload_directory(
+  pub async fn upload_directory<P: AsRef<Path>>(
     &self,
-    path: &Path,
+    path: P,
     opt: UploadOptions,
   ) -> SkynetResult<String> {
-    upload::upload_directory(self, path, opt).await
+    upload::upload_directory(self, path.as_ref(), opt).await
   }
 
   pub async fn download_data(
