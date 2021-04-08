@@ -1,6 +1,5 @@
-use crate::{SkynetClient, UploadOptions};
 use std::collections::HashMap;
-use http::{request::Builder, uri::Authority};
+use http::uri::Authority;
 use hyper::Uri;
 
 pub const DEFAULT_PORTAL_URL: &str = "https://siasky.net";
@@ -48,27 +47,4 @@ pub fn make_uri(
     .path_and_query(path_and_query)
     .build()
     .unwrap()
-}
-
-pub fn build_request(
-  client: &SkynetClient,
-  req: Builder,
-  opt: UploadOptions,
-  extra_path: Option<String>,
-  custom_content_type: Option<String>,
-  query: HashMap<String, String>,
-) -> Builder {
-  let uri = make_uri(client.get_portal_url(), opt.endpoint_path, opt.api_key, extra_path, query);
-
-  let mut req = req.uri(uri);
-
-  if let Some(custom_user_agent) = opt.custom_user_agent {
-    req = req.header("User-Agent", custom_user_agent);
-  }
-
-  if let Some(custom_content_type) = custom_content_type {
-    req = req.header("Content-Type", custom_content_type);
-  }
-
-  req
 }

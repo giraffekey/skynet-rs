@@ -1,4 +1,4 @@
-use crate::{SkynetClient, SkynetError::*, SkynetResult, util::build_request, URI_SKYNET_PREFIX};
+use crate::{SkynetClient, SkynetError::*, SkynetResult, util::make_uri, URI_SKYNET_PREFIX};
 use std::{
   collections::HashMap,
   fs,
@@ -6,9 +6,8 @@ use std::{
   path::Path,
   str,
 };
-use hyper::{body, Client, Request};
-use hyper_tls::HttpsConnector;
-use mime::{Mime, MULTIPART_FORM_DATA};
+use hyper::{body, Request};
+use mime::Mime;
 use serde::Deserialize;
 use textnonce::TextNonce;
 use walkdir::WalkDir;
@@ -52,8 +51,6 @@ pub async fn upload_data(
   data: HashMap<String, (Mime, Vec<u8>)>,
   opt: UploadOptions,
 ) -> SkynetResult<String> {
-  let https = HttpsConnector::new();
-  let hyper = Client::builder().build::<_, hyper::Body>(https);
   let req = Request::builder().method("POST");
 
   let mut query = HashMap::new();
@@ -103,13 +100,21 @@ pub async fn upload_data(
 
   let content_type = format!(
     "{}; boundary=\"{}\"",
-    MULTIPART_FORM_DATA,
+    mime::MULTIPART_FORM_DATA,
     str::from_utf8(&boundary).map_err(Utf8Error)?);
 
-  let req = build_request(client, req, opt, None, Some(content_type), query);
+  let uri = make_uri(client.get_portal_url(), opt.endpoint_path, opt.api_key, None, query);
+
+  let mut req = req
+    .uri(uri)
+    .header("Content-Type", content_type);
+
+  if let Some(custom_user_agent) = opt.custom_user_agent {
+    req = req.header("User-Agent", custom_user_agent);
+  }
 
   let req = req.body(body.into()).map_err(HttpError)?;
-  let res = hyper.request(req).await.map_err(HyperError)?;
+  let res = client.http.request(req).await.map_err(HyperError)?;
   let body = body::to_bytes(res.into_body()).await.map_err(HyperError)?;
   let body_str = str::from_utf8(&body).map_err(Utf8Error)?;
   let res: UploadResponse = serde_json::from_str(body_str)
