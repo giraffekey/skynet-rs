@@ -3,7 +3,7 @@
 Rust implementation of the [Sia Skynet](https://siasky.net) API.
 
 ```rust
-use skynet::{SkynetClient, UploadOptions, DownloadOptions, MetadataOptions};
+use skynet_rs::{SkynetClient, UploadOptions, DownloadOptions, MetadataOptions};
 
 let client = SkynetClient::default();
 let skylink = client.upload_file("hello.txt", UploadOptions::default()).await?;
