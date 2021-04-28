@@ -1,7 +1,8 @@
 use crate::{
-  upload, download,
+  upload, download, encryption,
   UploadOptions,
   DownloadOptions, MetadataOptions, Metadata,
+  Skykey, SkykeyOptions,
   SkynetResult,
   util::DEFAULT_PORTAL_URL,
 };
@@ -95,6 +96,43 @@ impl SkynetClient {
     opt: MetadataOptions,
   ) -> SkynetResult<Metadata> {
     download::get_metadata(self, skylink, opt).await
+  }
+
+  pub async fn add_skykey(
+    &self,
+    skykey: &str,
+    opt: SkykeyOptions,
+  ) -> SkynetResult<()> {
+    encryption::add_skykey(self, skykey, opt).await
+  }
+
+  pub async fn create_skykey(
+    &self,
+    name: &str,
+    skykey_type: &str,
+    opt: SkykeyOptions,
+  ) -> SkynetResult<Skykey> {
+    encryption::create_skykey(self, name, skykey_type, opt).await
+  }
+
+  pub async fn get_skykey_by_name(
+    &self,
+    name: &str,
+    opt: SkykeyOptions,
+  ) -> SkynetResult<Skykey> {
+    encryption::get_skykey_by_name(self, name, opt).await
+  }
+
+  pub async fn get_skykey_by_id(
+    &self,
+    id: &str,
+    opt: SkykeyOptions,
+  ) -> SkynetResult<Skykey> {
+    encryption::get_skykey_by_id(self, id, opt).await
+  }
+
+  pub async fn get_skykeys(&self, opt: SkykeyOptions) -> SkynetResult<Vec<Skykey>> {
+    encryption::get_skykeys(self, opt).await
   }
 }
 
