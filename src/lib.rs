@@ -1,4 +1,5 @@
 mod client;
+mod crypto;
 mod download;
 mod encryption;
 mod error;
@@ -6,6 +7,7 @@ mod upload;
 mod util;
 
 pub use client::{SkynetClientOptions, SkynetClient};
+pub use crate::crypto::KeyPair;
 pub use download::{DownloadOptions, MetadataOptions, Metadata, Subfile};
 pub use encryption::{Skykey, SkykeyOptions};
 pub use error::{SkynetError, SkynetResult};

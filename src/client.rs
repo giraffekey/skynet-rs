@@ -1,8 +1,7 @@
 use crate::{
-  upload, download, encryption,
-  UploadOptions,
-  DownloadOptions, MetadataOptions, Metadata,
-  Skykey, SkykeyOptions,
+  crypto, download, encryption, upload,
+  UploadOptions, DownloadOptions, MetadataOptions, Metadata,
+  Skykey, SkykeyOptions, KeyPair,
   SkynetResult,
   util::DEFAULT_PORTAL_URL,
 };
@@ -133,6 +132,18 @@ impl SkynetClient {
 
   pub async fn get_skykeys(&self, opt: SkykeyOptions) -> SkynetResult<Vec<Skykey>> {
     encryption::get_skykeys(self, opt).await
+  }
+
+  pub fn gen_keypair_and_seed(length: u32) -> (KeyPair, Vec<u8>) {
+    crypto::gen_keypair_and_seed(length)
+  }
+
+  pub fn gen_keypair_from_seed(seed: &[u8]) -> KeyPair {
+    crypto::gen_keypair_from_seed(seed)
+  }
+
+  pub fn derive_child_seed(master: &[u8], seed: &[u8]) -> Vec<u8> {
+    crypto::derive_child_seed(master, seed)
   }
 }
 
