@@ -10,6 +10,7 @@ pub enum SkynetError {
   HyperError(hyper::Error),
   Utf8Error(std::str::Utf8Error),
   PortalResponse(String),
+  InvalidSignature,
 }
 
 pub type SkynetResult<T> = Result<T, SkynetError>;
