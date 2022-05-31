@@ -129,9 +129,9 @@ pub async fn upload_data(
   let res: UploadResponse = serde_json::from_str(body_str)
     .map_err(|_| PortalResponse(body_str.to_string()))?;
 
-  let skylink = format!("{}{}", URI_SKYNET_PREFIX, res.skylink);
+  // let skylink = format!("{}{}", URI_SKYNET_PREFIX, res.skylink);
 
-  Ok(skylink)
+  Ok(res.skylink)
 }
 
 pub async fn upload_file(
