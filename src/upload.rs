@@ -114,7 +114,7 @@ pub async fn upload_data(
     .uri(uri)
     .header("Content-Type", content_type);
 
-  if let Some(apikey) = &opt.api_key {
+  if let Some(apikey) = &opt.api_key.or(client.get_options().api_key.clone()) {
     req = req.header("Skynet-Api-Key", apikey.clone());
   }
 
