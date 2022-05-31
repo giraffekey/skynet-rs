@@ -103,11 +103,20 @@ pub async fn upload_data(
     mime::MULTIPART_FORM_DATA,
     str::from_utf8(&boundary).map_err(Utf8Error)?);
 
-  let uri = make_uri(client.get_portal_url(), opt.endpoint_path, opt.api_key, None, query);
+  let uri = make_uri(
+    client.get_portal_url(),
+    opt.endpoint_path,
+    opt.api_key.clone(),
+    None,
+    query);
 
   let mut req = req
     .uri(uri)
     .header("Content-Type", content_type);
+
+  if let Some(apikey) = &opt.api_key {
+    req = req.header("Skynet-Api-Key", apikey.clone());
+  }
 
   if let Some(custom_user_agent) = opt.custom_user_agent {
     req = req.header("User-Agent", custom_user_agent);
