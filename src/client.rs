@@ -48,6 +48,10 @@ impl SkynetClient {
     self.portal_url.as_str()
   }
 
+  pub fn get_options(&self) -> &SkynetClientOptions {
+    &self.options
+  }
+
   pub async fn upload_data(
     &self,
     data: HashMap<String, (Mime, Vec<u8>)>,
