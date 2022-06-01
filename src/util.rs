@@ -16,11 +16,13 @@ pub fn make_uri(
   let scheme = parts[0];
   let host = parts[1];
 
-  let authority: Authority = if let Some(api_key) = api_key {
-    format!("{}@{}", api_key, host).parse().unwrap()
-  } else {
-    host.parse().unwrap()
-  };
+  // let authority: Authority = if let Some(api_key) = api_key {
+  //   format!("{}@{}", api_key, host).parse().unwrap()
+  // } else {
+  //   host.parse().unwrap()
+  // };
+
+  let authority: Authority = host.parse().unwrap();
 
   let extra_path = if let Some(extra_path) = extra_path {
     format!("/{}", extra_path)
