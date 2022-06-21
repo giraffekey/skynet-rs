@@ -14,6 +14,7 @@ use walkdir::WalkDir;
 use tus_async_client::{Client, HttpHandler};
 use reqwest::{self, ClientBuilder};
 use std::rc::Rc;
+use std::sync::Arc;
 use http::Uri;
 use crate::util::make_reqwest_headers;
 
@@ -30,7 +31,7 @@ const SKYNET_TUS_CHUNK_SIZE : u64 = (1 << 22) * 10;
 /// The size at which files are considered "large" and will be uploaded using the tus resumable upload protocol. This is the size of one chunk by default (40 mib). Note that this does not affect the actual size of chunks used by the protocol.
 const USE_TUS_THRESHOLD_BYTES : u64 = SKYNET_TUS_CHUNK_SIZE;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UploadOptions {
   pub endpoint_path: String,
   pub api_key: Option<String>,
@@ -217,35 +218,73 @@ pub fn upload_data_tus_uri(
     upload_data_query_params(client, path, opt)?))
 }
 
+pub fn create_tus_client(
+  client: &SkynetClient,
+  path: &Path,
+  opt: UploadOptions,
+) -> SkynetResult<tus_async_client::Client> {
+  let headers = make_reqwest_headers(
+    upload_data_tus_headers(
+      &client,
+      path,
+      &opt.clone())?);
+
+  let req = reqwest::Client::builder()
+      .default_headers(headers.clone());
+
+  Ok(Client::new(
+    HttpHandler::new(
+      Arc::new(req
+          .build()
+          .map_err(ReqwestError)?
+      ))))
+}
+
+pub async fn tus_create_upload_url(
+  client: &SkynetClient,
+  path: &Path,
+  opt: UploadOptions,
+) -> SkynetResult<String> {
+  let uri = upload_data_tus_uri(
+    &client,
+    path,
+    &UploadOptions::default()
+  )?;
+
+  create_tus_client(client, path, opt)?
+      .create(&uri.to_string(), path)
+      .await
+      .map_err(TUSError)
+}
+
 pub async fn upload_data_tus(
   client: &SkynetClient,
   path: &Path,
   opt: UploadOptions,
 ) -> SkynetResult<String> {
-  let mut req = reqwest::Client::builder();
-  let mut headers = upload_data_tus_headers(&client, path, &UploadOptions::default())?;
-  let headers = make_reqwest_headers(headers);
-  let uri = upload_data_tus_uri(&client, path, &UploadOptions::default())?;
+  let upload_url = tus_create_upload_url(client, path, opt.clone()).await?;
+  let tus_client = create_tus_client(client, path, opt.clone())?;
 
-  req = req.default_headers(headers.clone());
-
-  let tus_client = Client::new(
-    HttpHandler::new(
-      Rc::new(req
-          .build()
-          .map_err(ReqwestError)?
-      )));
-
-  let upload_url = tus_client
-      .create(&uri.to_string(), path)
-      .await
-      .map_err(TUSError)?;
-
+  // perform upload
   tus_client
       .upload_with_chunk_size(&upload_url, path, SKYNET_TUS_CHUNK_SIZE as usize)
       .await
       .map_err(TUSError)?
   ;
+
+  // finish upload and retrieve skylink
+  get_tus_upload_skylink(client, path, opt.clone(), upload_url).await
+}
+
+/// get skylink from HEAD request headers after all pieces finished upload
+pub async fn get_tus_upload_skylink(
+  client: &SkynetClient,
+  path: &Path,
+  opt: UploadOptions,
+  upload_url: String
+) -> SkynetResult<String> {
+  let headers = upload_data_tus_headers(&client, path, &opt)?;
+  let headers = make_reqwest_headers(headers);
 
   let meta = reqwest::Client::new()
       .head(upload_url)
