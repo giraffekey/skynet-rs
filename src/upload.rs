@@ -223,12 +223,14 @@ pub fn create_tus_client(
   path: &Path,
   opt: UploadOptions,
 ) -> SkynetResult<tus_async_client::Client> {
-  let mut headers = upload_data_tus_headers(&client, path, &UploadOptions::default())?;
-  let headers = make_reqwest_headers(headers);
+  let headers = make_reqwest_headers(
+    upload_data_tus_headers(
+      &client,
+      path,
+      &opt.clone())?);
 
-  let mut req = reqwest::Client::builder();
-
-  req = req.default_headers(headers.clone());
+  let req = reqwest::Client::builder()
+      .default_headers(headers.clone());
 
   Ok(Client::new(
     HttpHandler::new(
@@ -243,13 +245,11 @@ pub async fn tus_create_upload_url(
   path: &Path,
   opt: UploadOptions,
 ) -> SkynetResult<String> {
-  let mut headers = upload_data_tus_headers(&client, path, &UploadOptions::default())?;
-  let headers = make_reqwest_headers(headers);
-
-  let mut req = reqwest::Client::builder();
-  let uri = upload_data_tus_uri(&client, path, &UploadOptions::default())?;
-
-  req = req.default_headers(headers.clone());
+  let uri = upload_data_tus_uri(
+    &client,
+    path,
+    &UploadOptions::default()
+  )?;
 
   create_tus_client(client, path, opt)?
       .create(&uri.to_string(), path)
@@ -257,33 +257,34 @@ pub async fn tus_create_upload_url(
       .map_err(TUSError)
 }
 
-pub async fn upload_data_tus_perform(
+pub async fn upload_data_tus(
   client: &SkynetClient,
   path: &Path,
   opt: UploadOptions,
-) -> SkynetResult<()> {
+) -> SkynetResult<String> {
   let upload_url = tus_create_upload_url(client, path, opt.clone()).await?;
-  let tus_client = create_tus_client(client, path, opt)?;
+  let tus_client = create_tus_client(client, path, opt.clone())?;
 
+  // perform upload
   tus_client
       .upload_with_chunk_size(&upload_url, path, SKYNET_TUS_CHUNK_SIZE as usize)
       .await
       .map_err(TUSError)?
   ;
 
-  Ok(())
+  // finish upload and retrieve skylink
+  get_tus_upload_skylink(client, path, opt.clone(), upload_url).await
 }
 
-pub async fn upload_data_tus(
+/// get skylink from HEAD request headers after all pieces finished upload
+pub async fn get_tus_upload_skylink(
   client: &SkynetClient,
   path: &Path,
   opt: UploadOptions,
+  upload_url: String
 ) -> SkynetResult<String> {
-  let mut headers = upload_data_tus_headers(&client, path, &UploadOptions::default())?;
+  let headers = upload_data_tus_headers(&client, path, &opt)?;
   let headers = make_reqwest_headers(headers);
-  let upload_url = tus_create_upload_url(client, path, opt.clone()).await?;
-
-  upload_data_tus_perform(client, path, opt.clone()).await?;
 
   let meta = reqwest::Client::new()
       .head(upload_url)
