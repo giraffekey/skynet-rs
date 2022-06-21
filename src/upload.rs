@@ -14,6 +14,7 @@ use walkdir::WalkDir;
 use tus_async_client::{Client, HttpHandler};
 use reqwest::{self, ClientBuilder};
 use std::rc::Rc;
+use std::sync::Arc;
 use http::Uri;
 use crate::util::make_reqwest_headers;
 
@@ -231,7 +232,7 @@ pub fn create_tus_client(
 
   Ok(Client::new(
     HttpHandler::new(
-      Rc::new(req
+      Arc::new(req
           .build()
           .map_err(ReqwestError)?
       ))))
@@ -250,9 +251,7 @@ pub async fn tus_create_upload_url(
 
   req = req.default_headers(headers.clone());
 
-  let tus_client = create_tus_client(client, path, opt)?;
-
-  tus_client
+  create_tus_client(client, path, opt)?
       .create(&uri.to_string(), path)
       .await
       .map_err(TUSError)
