@@ -1,9 +1,22 @@
 use std::collections::HashMap;
+use std::iter::FromIterator;
+use std::str::FromStr;
 use http::uri::Authority;
 use hyper::Uri;
 
 pub const DEFAULT_PORTAL_URL: &str = "https://siasky.net";
 pub const URI_SKYNET_PREFIX: &str = "sia://";
+
+pub fn make_reqwest_headers(headers: HashMap<String, String>) -> reqwest::header::HeaderMap {
+  reqwest::header::HeaderMap::from_iter(headers
+                                            .into_iter()
+                                            .map(|(name, value)| (
+                                              reqwest::header::HeaderName::from_str(&*name)
+                                                  .expect("failed to parse header name"),
+                                              reqwest::header::HeaderValue::from_str(&*value)
+                                                  .expect("failed to parse header value")
+                                            )))
+}
 
 pub fn make_uri(
   portal_url: &str,
