@@ -1,11 +1,11 @@
 [package]
 name = "skynet-rs"
 version = "0.1.0"
-authors = ["cerebralcourt <0hhvxhv9@anonaddy.me>"]
+authors = ["giraffekey <giraffekey@tutanota.com>"]
 edition = "2018"
 license = "MIT"
 description = "Sia Skynet API"
-repository = "https://github.com/cerebralcourt/skynet-rs"
+repository = "https://github.com/giraffekey/skynet-rs"
 
 [dependencies]
 hex = "0.4"
